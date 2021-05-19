@@ -5,10 +5,159 @@
 #include <Kalman_Filter.h>
 #include <BasicLinearAlgebra.h>
 
+//**************************************
+//*********** MQTT CONFIG **************
+//**************************************
+const char *mqtt_server = "ioticos.org";
+const int mqtt_port = 1883;
+const char *mqtt_user = "Y9DB3HCxHac6tE3";
+const char *mqtt_pass = "mahtjNS6SdtSXtQ";
+const char *root_topic_subscribe = "qrZ422LFAtPNzjr/input";
+const char *root_topic_publish = "qrZ422LFAtPNzjr/output";
+
+
+//**************************************
+//*********** VAR SENSOR ***************
+//**************************************
+ADC pot1, pot2;
+const byte ADC1_PIN = 33;
+const byte ADC2_PIN = 34;
+uint16_t reading1;
+uint16_t reading2;
+
+
+//**************************************
+//*********** WIFICONFIG ***************
+//**************************************
+const char* ssid = "NOMBRE DE LA RED";
+const char* password =  "CONTRASEÑA DE LA RED";
+
+
+
+//**************************************
+//*********** GLOBALES   ***************
+//**************************************
+WiFiClient espClient;
+PubSubClient client(espClient);
+char msg[25];
+long count=0;
+
+
+//************************
+//** F U N C I O N E S ***
+//************************
+void callback(char* topic, byte* payload, unsigned int length);
+void reconnect();
+void setup_wifi();
+
 void setup() {
-  // put your setup code here, to run once:
+  Serial.begin(115200);
+  setup_wifi();
+  client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(callback);
+
+  pot1.begin(ADC1_PIN, 12, 3.3F);
+  pot2.begin(ADC2_PIN, 12, 3.3F);
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+  
+  if (!client.connected()) {
+		reconnect();
+	}
+
+  if (client.connected()){
+    /*
+	String str = "La cuenta es -> " + String(count);
+    str.toCharArray(msg,25);
+    client.publish(root_topic_publish,msg);
+    count++;
+	*/
+	reading1 = pot1.readRaw();
+	reading2 = pot2.readRaw();
+	String str1 = "Voltaje del potenciometro 1 ->" + String(reading1);
+	str1.toCharArray(msg,35);
+	client.publish(root_topic_publish,msg);
+	//Serial.printf("%d", reading);
+	String str2 = "Voltaje del potenciometro 2 ->" + String(reading2);
+	str2.toCharArray(msg,35);
+	client.publish(root_topic_publish,msg);
+    delay(500);
+  }
+  client.loop();
+}
+
+
+
+
+//*****************************
+//***    CONEXION WIFI      ***
+//*****************************
+void setup_wifi(){
+	delay(10);
+	// Nos conectamos a nuestra red Wifi
+	Serial.println();
+	Serial.print("Conectando a ssid: ");
+	Serial.println(ssid);
+
+	WiFi.begin(ssid, password);
+
+	while (WiFi.status() != WL_CONNECTED) {
+		delay(500);
+		Serial.print(".");
+	}
+
+	Serial.println("");
+	Serial.println("Conectado a red WiFi!");
+	Serial.println("Dirección IP: ");
+	Serial.println(WiFi.localIP());
+}
+
+
+
+//*****************************
+//***    CONEXION MQTT      ***
+//*****************************
+
+void reconnect() {
+
+	while (!client.connected()) {
+		Serial.print("Intentando conexión Mqtt...");
+		// Creamos un cliente ID
+		String clientId = "IOTICOS_H_W_";
+		clientId += String(random(0xffff), HEX);
+		// Intentamos conectar
+		if (client.connect(clientId.c_str(),mqtt_user,mqtt_pass)) {
+			Serial.println("Conectado!");
+			// Nos suscribimos
+			if(client.subscribe(root_topic_subscribe)){
+        Serial.println("Suscripcion ok");
+      }else{
+        Serial.println("fallo Suscripciión");
+      }
+		} else {
+			Serial.print("falló :( con error -> ");
+			Serial.print(client.state());
+			Serial.println(" Intentamos de nuevo en 5 segundos");
+			delay(5000);
+		}
+	}
+}
+
+
+//*****************************
+//***       CALLBACK        ***
+//*****************************
+
+void callback(char* topic, byte* payload, unsigned int length){
+	String incoming = "";
+	Serial.print("Mensaje recibido desde -> ");
+	Serial.print(topic);
+	Serial.println("");
+	for (int i = 0; i < length; i++) {
+		incoming += (char)payload[i];
+	}
+	incoming.trim();
+	Serial.println("Mensaje -> " + incoming);
+
 }
